@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
 
 import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
@@ -30,18 +30,49 @@ import Dashboard from "./admin/Dashboard";
 import Products from "./admin/Products";
 import Users from "./admin/Users";
 import "./admin/Admin.css";
+import { addToWishlist, removeFromWishlist, getWishlist } from './utils/wishlistHelper';
 
 function App() {
   
   const [favorites, setFavorites] = useState([]);
 
-  
-  const toggleFavorite = (product) => {
-    setFavorites((prev) =>
-      prev.find((item) => item.id === product.id)
-        ? prev.filter((item) => item.id !== product.id) 
-        : [...prev, product] 
-    );
+  // on app load (in App component) you may want to fetch saved wishlist:
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      getWishlist().then(items => {
+        // API returns objects with product relation -> map to favorites array of product objects
+        setFavorites(items.map(w => w.product));
+      }).catch(()=>{/* ignore */});
+    } else {
+      // optionally restore from localStorage if you used it previously
+      const raw = localStorage.getItem('favorites');
+      if (raw) setFavorites(JSON.parse(raw));
+    }
+  }, []);
+
+  const toggleFavorite = async (product) => {
+    const currentUser = localStorage.getItem('currentUser');
+    if (!currentUser) {
+      // keep existing behavior (open login modal)
+      setFavorites((prev) => prev.find(p=>p.id===product.id) ? prev.filter(p=>p.id!==product.id) : [...prev, product]);
+      // set post-login callback if desired
+      return;
+    }
+
+    const exists = favorites.some(p => p.id === product.id);
+    try {
+      if (exists) {
+        await removeFromWishlist(product.id);
+        setFavorites(prev => prev.filter(p => p.id !== product.id));
+      } else {
+        await addToWishlist(product.id);
+        setFavorites(prev => [...prev, product]);
+      }
+    } catch (err) {
+      console.error('Wishlist API error', err);
+      // show user-facing error if desired
+    }
   };
 
   

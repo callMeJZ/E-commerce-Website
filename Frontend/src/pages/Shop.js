@@ -13,6 +13,7 @@ import {
 import "../styles/Shop.css";
 import ProductCard from "../components/ProductCard";
 import LoginRequiredModal from "../components/LoginRequiredModal";
+import { addToCart } from "../utils/cartHelper";
 
 import catImg from "../assets/pets/cat.png";
 import dogImg from "../assets/pets/dog.png";
@@ -116,7 +117,7 @@ const Shop = ({
   }, []);
 
   // --- CART HANDLERS ---
-  const handleAddToCart = (product) => {
+  const handleAddToCart = async (product) => {
     const currentUser = localStorage.getItem("currentUser");
 
     if (!currentUser) {
@@ -126,17 +127,10 @@ const Shop = ({
       return;
     }
 
-    const updatedCart = [...cartItems];
-    const existing = updatedCart.find((item) => item.id === product.id);
-
-    if (existing) {
-      existing.quantity += 1;
-    } else {
-      updatedCart.push({ ...product, quantity: 1 });
-    }
-
-    setCartItems(updatedCart);
-    localStorage.setItem("cartItems", JSON.stringify(updatedCart));
+    const result = await addToCart(product, 1);
+    setAlertProduct(result.message);
+    setShowCartAlert(true);
+    setTimeout(() => setShowCartAlert(false), 3000);
 
     setAlertProduct(product.name);
     setShowCartAlert(true);

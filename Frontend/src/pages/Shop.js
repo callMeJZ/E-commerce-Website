@@ -9,11 +9,9 @@ import {
   Form,
   Spinner,
 } from "react-bootstrap";
-// REMOVED: import productsData from "../data/products.json";
 import "../styles/Shop.css";
 import ProductCard from "../components/ProductCard";
 import LoginRequiredModal from "../components/LoginRequiredModal";
-import { addToCart } from "../utils/cartHelper";
 
 import catImg from "../assets/pets/cat.png";
 import dogImg from "../assets/pets/dog.png";
@@ -22,7 +20,6 @@ import parrotImg from "../assets/pets/parrot.png";
 import rabbitImg from "../assets/pets/rabbit.png";
 import turtleImg from "../assets/pets/turtle.png";
 
-// 1. BACKEND CONFIG
 const API_URL = "http://localhost:8083/api/products";
 const IMAGE_BASE_URL = "http://localhost:8083";
 
@@ -36,78 +33,62 @@ const petTypes = [
 ];
 
 const Shop = ({
-  favorites: globalFavorites,
-  onToggleFavorite: globalToggleFavorite,
+  favorites,
+  onToggleFavorite,
+  cartItems, // Received from App.js
+  onAddToCart, // Received from App.js
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // 2. PARSE URL PARAMS (Fixes Category Link from Landing Page)
   const queryParams = new URLSearchParams(location.search);
   const initialPet = queryParams.get("petType") || "All";
   const initialCategory = queryParams.get("category") || "All";
 
-  // --- FAVORITES HANDLING ---
-  const [localFavorites, setLocalFavorites] = useState([]);
-  const favorites = globalFavorites ?? localFavorites;
-  const setFavorites = globalFavorites ? () => {} : setLocalFavorites;
-
-  const localToggleFavorite = (product) => {
-    const id = product.id;
-    setFavorites((prev) =>
-      prev.find((item) => item.id === id)
-        ? prev.filter((item) => item.id !== id)
-        : [...prev, product]
-    );
-  };
-  const onToggleFavorite = globalToggleFavorite || localToggleFavorite;
-
   // --- PRODUCT DATA STATE ---
-  const [allProducts, setAllProducts] = useState([]); // Store full API data
-  const [products, setProducts] = useState([]); // Store filtered data
-  const [isLoading, setIsLoading] = useState(true); // Loading state
+  const [allProducts, setAllProducts] = useState([]); 
+  const [products, setProducts] = useState([]); 
+  const [isLoading, setIsLoading] = useState(true); 
 
   const [filters, setFilters] = useState({
     petType: initialPet,
     category: initialCategory,
     brand: "All",
     minPrice: 0,
-    maxPrice: 200, // Matches your slider max
+    maxPrice: 200,
   });
 
-  // --- CART LOGIC ---
-  const [cartItems, setCartItems] = useState(() => {
-    const saved = localStorage.getItem("cartItems");
-    return saved ? JSON.parse(saved) : [];
-  });
+  // --- ALERT STATE ---
   const [showCartAlert, setShowCartAlert] = useState(false);
   const [alertProduct, setAlertProduct] = useState("");
+  
+  // --- NEW: WISHLIST ALERT STATE ---
+  const [showWishlistAlert, setShowWishlistAlert] = useState(false);
+  const [wishlistMsg, setWishlistMsg] = useState("");
+
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [modalAction, setModalAction] = useState("addToCart");
 
-  // 3. IMAGE HELPER (Fixes Broken Images)
   const getImageUrl = (path) => {
     if (!path) return "https://placehold.co/400x400/FFF0E6/CCC?text=No+Image";
     if (path.startsWith("data:")) return path;
     if (path.startsWith("http")) return path;
-    if (path.startsWith("/assets")) return path; // Serve from Frontend Public
-    return `${IMAGE_BASE_URL}${path}`; // Serve from Backend Storage
+    if (path.startsWith("/assets")) return path; 
+    return `${IMAGE_BASE_URL}${path}`; 
   };
 
-  // 4. FETCH PRODUCTS FROM API
   useEffect(() => {
     setIsLoading(true);
     fetch(API_URL)
       .then((res) => res.json())
       .then((data) => {
-        // Pre-process images so ProductCard gets a valid URL
         const formattedData = data.map((p) => ({
           ...p,
           image: getImageUrl(p.image),
         }));
         setAllProducts(formattedData);
-        setProducts(formattedData); // Initialize filtered list
+        setProducts(formattedData);
         setIsLoading(false);
       })
       .catch((err) => {
@@ -116,10 +97,9 @@ const Shop = ({
       });
   }, []);
 
-  // --- CART HANDLERS ---
-  const handleAddToCart = async (product) => {
+  // --- HANDLERS ---
+  const handleAddToCart = (product) => {
     const currentUser = localStorage.getItem("currentUser");
-
     if (!currentUser) {
       setSelectedProduct(product);
       setModalAction("addToCart");
@@ -127,25 +107,36 @@ const Shop = ({
       return;
     }
 
-    const result = await addToCart(product, 1);
-    setAlertProduct(result.message);
-    setShowCartAlert(true);
-    setTimeout(() => setShowCartAlert(false), 3000);
-
+    // Call the function passed from App.js
+    onAddToCart(product, 1);
+    
     setAlertProduct(product.name);
     setShowCartAlert(true);
-    setTimeout(() => setShowCartAlert(false), 2500);
+    setTimeout(() => setShowCartAlert(false), 3000);
   };
 
   const handleToggleFavorite = (product) => {
     const currentUser = localStorage.getItem("currentUser");
-
     if (!currentUser) {
       setSelectedProduct(product);
       setModalAction("addToWishlist");
       setShowLoginModal(true);
       return;
     }
+
+    // Determine message before toggling
+    const isFav = favorites.some((f) => f.id === product.id);
+    if (isFav) {
+      setWishlistMsg(`Removed ${product.name} from Wishlist`);
+    } else {
+      setWishlistMsg(`Added ${product.name} to Wishlist`);
+    }
+    
+    // Show Alert
+    setShowWishlistAlert(true);
+    setTimeout(() => setShowWishlistAlert(false), 3000);
+
+    // Call App.js toggle
     onToggleFavorite(product);
   };
 
@@ -153,11 +144,7 @@ const Shop = ({
     navigate("/cart");
   };
 
-  useEffect(() => {
-    localStorage.setItem("cartItems", JSON.stringify(cartItems));
-  }, [cartItems]);
-
-  // --- FILTER LOGIC ---
+  // --- FILTER LOGIC (unchanged) ---
   const handleFilterChange = (field, value) => {
     if (field === "petType") {
       setFilters({
@@ -169,9 +156,8 @@ const Shop = ({
     }
   };
 
-  // Apply Filters to allProducts
   useEffect(() => {
-    let filtered = allProducts; // Start with full data
+    let filtered = allProducts; 
 
     if (filters.petType !== "All") {
       filtered = filtered.filter((p) => p.petType === filters.petType);
@@ -192,7 +178,6 @@ const Shop = ({
     setProducts(filtered);
   }, [filters, allProducts]);
 
-  // Sync Filters with URL (Back/Forward navigation)
   useEffect(() => {
     const petFromQuery = queryParams.get("petType") || "All";
     const catFromQuery = queryParams.get("category") || "All";
@@ -204,9 +189,9 @@ const Shop = ({
     }));
   }, [location.search]);
 
-  // --- UI ---
   return (
     <Container className="my-5">
+      {/* CART ALERT */}
       <Alert
         variant="success"
         show={showCartAlert}
@@ -215,6 +200,18 @@ const Shop = ({
         className="cart-alert"
       >
         Added <strong>{alertProduct}</strong> to your cart!
+      </Alert>
+
+      {/* NEW: WISHLIST ALERT */}
+      <Alert
+        variant="primary" // Different color for distinction
+        show={showWishlistAlert}
+        onClose={() => setShowWishlistAlert(false)}
+        dismissible
+        className="cart-alert" // Reusing same fixed position style
+        style={{ top: "80px" }} // Offset slightly so they don't overlap perfectly if both triggered
+      >
+        {wishlistMsg}
       </Alert>
 
       <section className="shop-by-pet-section text-center mb-5">
@@ -238,7 +235,6 @@ const Shop = ({
       </section>
 
       <Row>
-        {/* SIDEBAR FILTERS */}
         <Col md={3}>
           <div className="mb-4 filter-section">
             <h5>Filter by Category</h5>
@@ -306,7 +302,8 @@ const Shop = ({
             />
           </div>
 
-          {cartItems.length > 0 && (
+          {/* Uses cartItems from props now */}
+          {cartItems && cartItems.length > 0 && (
             <Button
               variant="warning"
               className="w-100 mt-3"
@@ -317,7 +314,6 @@ const Shop = ({
           )}
         </Col>
 
-        {/* PRODUCT GRID */}
         <Col md={9}>
           <h2 className="mb-4">Products</h2>
           {isLoading ? (
@@ -350,7 +346,6 @@ const Shop = ({
         </Col>
       </Row>
 
-      {/* Login Required Modal */}
       {showLoginModal && (
         <LoginRequiredModal
           product={selectedProduct}
